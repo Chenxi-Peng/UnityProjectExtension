@@ -3,6 +3,7 @@ using System.Collections;
 using System.Collections.Generic;
 using System.IO;
 using System.Reflection;
+using Unity.VisualScripting;
 using UnityEditor;
 using UnityEngine;
 
@@ -25,9 +26,6 @@ public class FolderExplain : MonoBehaviour
 
     private static void HandleOnGUI(string guid, Rect selectionRect)
     {
-        //缩略视图
-        //if (IsThumbnailsView)
-        //return;
         //缩略视图 不显示
         if (selectionRect.height > 16)
             return;
@@ -58,8 +56,6 @@ public class FolderExplain : MonoBehaviour
         selectionRect.width = extSize.x;
         selectionRect.height = extSize.y;
 
-
-
         var offsetRect = new Rect(selectionRect.position, selectionRect.size);
         EditorGUI.LabelField(offsetRect, ShowDic[nameRaw], _style);
     }
@@ -73,8 +69,14 @@ public class FolderExplain : MonoBehaviour
 
     private static void DrawLineOnGUI(string guid, Rect selectionRect)
     {
+        //return;
+
         //缩略视图 不显示
         if (selectionRect.height > 16)
+            return;
+
+        //根据Rect的数值是否为14 判定当前是否为预览窗口
+        if (selectionRect.x <= 14)
             return;
 
         var path = AssetDatabase.GUIDToAssetPath(guid);
@@ -83,8 +85,14 @@ public class FolderExplain : MonoBehaviour
 
         var attr = File.GetAttributes(path);
 
-        if ((attr & FileAttributes.Directory) != FileAttributes.Directory)
-            return;
+        if(!IsSingleColumnView())
+        {
+            if ((attr & FileAttributes.Directory) != FileAttributes.Directory)
+                return;
+        }
+
+
+        //DebugLog.LogWarning($"{path} rectt is {selectionRect}");
 
         var name = path;
         int count = name.Length - name.Replace("/", "").Length;
@@ -109,14 +117,28 @@ public class FolderExplain : MonoBehaviour
         Handles.DrawBezier(horLineStart, horLineEnd,
             horLineStart, horLineEnd, colorLine, texture2d, 1);
 
-        //todo: 判定文件夹是否包含文件夹，不包含多绘制一次水平线
-        if(!isHaveDirectories(path))
+        if (IsSingleColumnView())
         {
-            Vector2 nextHorLineStart = new Vector2(horLineEnd.x + 1, selRect.y);
-            Vector2 nextHorLineEnd = new Vector2(horLineEnd.x + 1 + nextLongPixel, selRect.y);
+            if ((attr & FileAttributes.Directory) != FileAttributes.Directory)
+            {
+                Vector2 nextHorLineStart = new Vector2(horLineEnd.x + 1, selRect.y);
+                Vector2 nextHorLineEnd = new Vector2(horLineEnd.x + 1 + nextLongPixel, selRect.y);
 
-            Handles.DrawBezier(nextHorLineStart, nextHorLineEnd,
-                nextHorLineStart, nextHorLineEnd, colorLine, texture2d, 1);
+                Handles.DrawBezier(nextHorLineStart, nextHorLineEnd,
+                    nextHorLineStart, nextHorLineEnd, colorLine, texture2d, 1);
+            }
+        }
+        else
+        {
+            //判定文件夹是否包含文件夹，不包含多绘制一次水平线
+            if (!isHaveDirectories(path))
+            {
+                Vector2 nextHorLineStart = new Vector2(horLineEnd.x + 1, selRect.y);
+                Vector2 nextHorLineEnd = new Vector2(horLineEnd.x + 1 + nextLongPixel, selRect.y);
+
+                Handles.DrawBezier(nextHorLineStart, nextHorLineEnd,
+                    nextHorLineStart, nextHorLineEnd, colorLine, texture2d, 1);
+            }
         }
 
         //绘制竖线
@@ -163,4 +185,34 @@ public class FolderExplain : MonoBehaviour
         }
     }
 
+    /// <summary>
+    /// 判定窗口是否为OneColumn
+    /// </summary>
+    /// <returns></returns>
+    private static bool IsSingleColumnView()
+    {
+        var projectWindow = GetProjectWindow();
+        var columnsCount = (int)projectWindow.GetType().GetField("m_ViewMode", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(projectWindow);
+        return columnsCount == 0;
+    }
+
+
+    private static EditorWindow GetProjectWindow()
+    {
+        if (EditorWindow.focusedWindow != null && EditorWindow.focusedWindow.titleContent.text == "Project")
+        {
+            return EditorWindow.focusedWindow;
+        }
+
+        EditorWindow[] windows = Resources.FindObjectsOfTypeAll<EditorWindow>();
+        foreach (EditorWindow item in windows)
+        {
+            if (item.titleContent.text == "Project")
+            {
+                return item;
+            }
+        }
+
+        return default;
+    }
 }
